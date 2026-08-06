@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contador Online 2s</title>
+<style>
+  body { font-family: Arial; background: #121212; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+  .card { background: #1e1e1e; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 0 20px #00C853; }
+  .card h1 { margin: 0 0 10px; font-size: 20px; color: #aaa; }
+  .card h2 { margin: 0; font-size: 80px; color: #00C853; }
+  .card p { margin-top: 10px; color: #777; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>👥 Online Ahora</h1>
+  <h2 id="contador">0</h2>
+  <p>Actualiza cada 2 segundos</p>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, runTransaction, onDisconnect, serverTimestamp, get, remove } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD_OgFQRdkDVNSQPq48zNE6s1J7Y7I__js",
+  authDomain: "pagos-yape-4968b.firebaseapp.com",
+  databaseURL: "https://pagos-yape-4968b-default-rtdb.firebaseio.com",
+  projectId: "pagos-yape-4968b",
+  storageBucket: "pagos-yape-4968b.firebasestorage.app",
+  messagingSenderId: "104083728326",
+  appId: "1:104083728326:web:fc2fd7ee876a60f45434c7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const deviceId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+const contadorRef = ref(db, 'contador/online');
+const miRef = ref(db, 'contador/conectados/' + deviceId);
+
+// 1. MOSTRAR EL NUMERO
+onValue(contadorRef, (snap) => {
+  document.getElementById('contador').innerText = snap.val() || 0;
+});
+
+// 2. AL ENTRAR: +1
+get(miRef).then(snap => {
+  if(!snap.exists()){
+    runTransaction(contadorRef, (c) => (c||0) + 1);
+  }
+});
+
+// 3. AVISAR CADA 1 SEG "SIGOO AQUI"  <- CAMBIO
+set(miRef, {time: serverTimestamp()});
+setInterval(() => {
+  set(miRef, {time: serverTimestamp()});
+}, 1000); // cada 1 segundo
+
+// 4. SI SE VA: -1
+onDisconnect(miRef).remove();
+onDisconnect(contadorRef).transaction((c) => Math.max(0, (c||1) - 1));
+
+// 5. LIMPIEZA: Si no avisa en 2 seg, lo borra <- CAMBIO
+setInterval(() => {
+  get(ref(db, 'contador/conectados')).then(snap => {
+    const ahora = Date.now();
+    snap.forEach(child => {
+      if(ahora - child.val().time > 2000){ // 2 segundos
+        runTransaction(contadorRef, (c) => Math.max(0, (c||1) - 1));
+        remove(ref(db, 'contador/conectados/' + child.key));
+      }
+    });
+  });
+}, 2000); // revisa cada 2 segundos
+
+</script>
+</body>
+</html>
